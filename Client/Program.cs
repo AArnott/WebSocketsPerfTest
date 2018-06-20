@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Net.Http;
 using System.Net.WebSockets;
 using System.Threading;
@@ -12,14 +13,46 @@ namespace Client
 {
     class Program
     {
-        private const string serviceBaseUrl = "http://localhost:5000";
+        private const string serviceBaseUrl = "http://websocketsperftest2.eastus.azurecontainer.io";
 
         static async Task Main(string[] args)
         {
-            int iterations = 10000;
-            await TimeItAsync("HTTP         ", i => DoHttpCallsAsync(i), iterations);
-            await TimeItAsync("WS (json-rpc)", i => DoJsonRpcOverWebSocketsAsync(i), iterations);
-            await TimeItAsync("WS (raw)     ", i => DoRawBinaryOverWebSocketsAsync(i), iterations);
+            int iterations = 4900;
+
+            await ConcurrentWebSocketsAsync(iterations);
+            //await TimeItAsync("HTTP         ", i => DoHttpCallsAsync(i), iterations);
+            //await TimeItAsync("WS (json-rpc)", i => DoJsonRpcOverWebSocketsAsync(i), iterations);
+            //await TimeItAsync("WS (raw)     ", i => DoRawBinaryOverWebSocketsAsync(i), iterations);
+        }
+
+        private static async Task ConcurrentWebSocketsAsync(int iterations)
+        {
+            await TimeItAsync("Concurrent web sockets",
+                async delegate
+                {
+                    Console.WriteLine($"Establishing {iterations} web socket connections...");
+                    var ws = new Task<ClientWebSocket>[iterations];
+                    for (int i = 0; i < ws.Length; i++)
+                    {
+                        int j = i;
+                        ws[i] = Task.Run(async delegate
+                        {
+                            var socket = new ClientWebSocket();
+                            var socketUrl = new UriBuilder(serviceBaseUrl + "/api/socket?useJsonRpc=true");
+                            socketUrl.Scheme = "ws://";
+                            await socket.ConnectAsync(socketUrl.Uri, CancellationToken.None);
+                            if (j % 100 == 0) Console.Write(".");
+                            return socket;
+                        });
+                    }
+
+                    await Task.WhenAll(ws);
+                    Console.WriteLine();
+                    Console.WriteLine($"Closing {iterations} web socket connections...");
+                    await Task.WhenAll(ws.Select(socket =>
+                        socket.Result.CloseAsync(WebSocketCloseStatus.NormalClosure, "normal", CancellationToken.None)));
+                },
+            1);
         }
 
         private static async Task TimeItAsync(string name, Func<int, Task> operation, int iterations)
