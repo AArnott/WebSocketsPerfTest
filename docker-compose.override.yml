@@ -1,0 +1,19 @@
+version: '3.4'
+
+# A single command to just run the image with all the right settings is:
+# docker run --rm -it -p 5001:443 -p 5000:80 -e ASPNETCORE_URLS="https://+;http://+" -e ASPNETCORE_HTTPS_PORT=5001 -e ASPNETCORE_Kestrel__Certificates__Default__Password="crypticpassword" -e ASPNETCORE_Kestrel__Certificates__Default__Path=/https/aspnetapp.pfx -v $env:USERPROFILE\.aspnet\https:/https/ websocketsperftest:latest
+
+services:
+  server:
+    volumes:
+      # You must run this command once:
+      # dotnet dev-certs https -ep %USERPROFILE%\.aspnet\https\aspnetapp.pfx -p crypticpassword
+      - 'c:\users\andarno\.aspnet\https:/https:ro'
+    environment:
+      - ASPNETCORE_URLS=https://+;http://+
+      - ASPNETCORE_HTTPS_PORT=5001
+      - ASPNETCORE_Kestrel__Certificates__Default__Password=crypticpassword
+      - ASPNETCORE_Kestrel__Certificates__Default__Path=/https/aspnetapp.pfx
+    ports:
+      - 5000:80
+      - 5001:443

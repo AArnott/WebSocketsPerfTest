@@ -10,6 +10,7 @@ namespace Server.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    //[Authenticate]
     public class HttpController : ControllerBase
     {
         [HttpPost]

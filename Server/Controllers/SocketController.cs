@@ -12,6 +12,7 @@ namespace Server.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    //[Authenticate]
     public class SocketController : ControllerBase
     {
         [HttpGet]
