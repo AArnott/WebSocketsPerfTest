@@ -17,8 +17,9 @@ namespace Client
         static async Task Main(string[] args)
         {
             int iterations = 10000;
-            await TimeItAsync("HTTP", i => DoHttpCallsAsync(i), iterations);
-            await TimeItAsync("WS  ", i => DoWebSocketsAsync(i), iterations);
+            await TimeItAsync("HTTP         ", i => DoHttpCallsAsync(i), iterations);
+            await TimeItAsync("WS (json-rpc)", i => DoJsonRpcOverWebSocketsAsync(i), iterations);
+            await TimeItAsync("WS (raw)     ", i => DoRawBinaryOverWebSocketsAsync(i), iterations);
         }
 
         private static async Task TimeItAsync(string name, Func<int, Task> operation, int iterations)
@@ -40,18 +41,36 @@ namespace Client
             }
         }
 
-        private static async Task DoWebSocketsAsync(int iterations)
+        private static async Task DoJsonRpcOverWebSocketsAsync(int iterations)
         {
             var socket = new ClientWebSocket();
-            var socketUrl = new UriBuilder(serviceBaseUrl + "/api/socket");
+            var socketUrl = new UriBuilder(serviceBaseUrl + "/api/socket?useJsonRpc=true");
             socketUrl.Scheme = "ws://";
             await socket.ConnectAsync(socketUrl.Uri, CancellationToken.None);
-            var jsonRpc = new JsonRpc(new WebSocketMessageHandler(socket));
-            var server = jsonRpc.Attach<ISocketServer>();
-            jsonRpc.StartListening();
+            using (var jsonRpc = new JsonRpc(new WebSocketMessageHandler(socket)))
+            {
+                var server = jsonRpc.Attach<ISocketServer>();
+                jsonRpc.StartListening();
+                for (int i = 0; i < iterations; i++)
+                {
+                    await server.HiAsync("Andrew");
+                }
+
+                await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "normal", CancellationToken.None);
+            }
+        }
+
+        private static async Task DoRawBinaryOverWebSocketsAsync(int iterations)
+        {
+            var socket = new ClientWebSocket();
+            var socketUrl = new UriBuilder(serviceBaseUrl + "/api/socket?useJsonRpc=false");
+            socketUrl.Scheme = "ws://";
+            await socket.ConnectAsync(socketUrl.Uri, CancellationToken.None);
+            var buffer = new byte[100];
             for (int i = 0; i < iterations; i++)
             {
-                await server.HiAsync("Andrew");
+                await socket.SendAsync(new ArraySegment<byte>(buffer, 0, 20), WebSocketMessageType.Binary, true, default);
+                await socket.ReceiveAsync(new ArraySegment<byte>(buffer, 0, 20), default);
             }
 
             await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "normal", CancellationToken.None);
