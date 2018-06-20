@@ -6,6 +6,7 @@ using System.Net.Http;
 using System.Net.WebSockets;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.VisualStudio.Threading;
 using Server;
 using StreamJsonRpc;
 
@@ -13,16 +14,23 @@ namespace Client
 {
     class Program
     {
-        private const string serviceBaseUrl = "http://websocketsperftest2.eastus.azurecontainer.io";
+        // private const string serviceBaseUrl = "http://websocketsperftest-west.westus2.azurecontainer.io";
+        // private const string serviceBaseUrl = "http://websocketsperftest2.eastus.azurecontainer.io";
+        private const string serviceBaseUrl = "http://localhost:5000";
 
-        static async Task Main(string[] args)
+        static async Task<int> Main(string[] args)
         {
-            int iterations = 4900;
+            if (args.Length != 1 || !int.TryParse(args[0], out int iterations)) {
+                await Console.Error.WriteLineAsync("Pass in the number of iterations as the only argument.");
+                return 1;
+            }
 
-            await ConcurrentWebSocketsAsync(iterations);
-            //await TimeItAsync("HTTP         ", i => DoHttpCallsAsync(i), iterations);
-            //await TimeItAsync("WS (json-rpc)", i => DoJsonRpcOverWebSocketsAsync(i), iterations);
-            //await TimeItAsync("WS (raw)     ", i => DoRawBinaryOverWebSocketsAsync(i), iterations);
+            // await ConcurrentWebSocketsAsync(iterations);
+            await TimeItAsync("HTTP         ", i => DoHttpCallsAsync(i), iterations);
+            await TimeItAsync("WS (json-rpc)", i => DoJsonRpcOverWebSocketsAsync(i), iterations);
+            await TimeItAsync("WS (raw)     ", i => DoRawBinaryOverWebSocketsAsync(i), iterations);
+
+            return 0;
         }
 
         private static async Task ConcurrentWebSocketsAsync(int iterations)
@@ -32,24 +40,34 @@ namespace Client
                 {
                     Console.WriteLine($"Establishing {iterations} web socket connections...");
                     var ws = new Task<ClientWebSocket>[iterations];
+                    int successful = 0;
                     for (int i = 0; i < ws.Length; i++)
                     {
-                        int j = i;
                         ws[i] = Task.Run(async delegate
                         {
                             var socket = new ClientWebSocket();
                             var socketUrl = new UriBuilder(serviceBaseUrl + "/api/socket?useJsonRpc=true");
                             socketUrl.Scheme = "ws://";
-                            await socket.ConnectAsync(socketUrl.Uri, CancellationToken.None);
-                            if (j % 100 == 0) Console.Write(".");
-                            return socket;
+                            while (true)
+                            {
+                                try
+                                {
+                                    await socket.ConnectAsync(socketUrl.Uri, CancellationToken.None);
+                                    if (Interlocked.Increment(ref successful) % 100 == 0) Console.Write(".");
+                                    return socket;
+                                }
+                                catch (Exception)
+                                {
+                                }
+                            }
                         });
                     }
 
-                    await Task.WhenAll(ws);
+                    await Task.WhenAll(ws).NoThrowAwaitable();
                     Console.WriteLine();
-                    Console.WriteLine($"Closing {iterations} web socket connections...");
-                    await Task.WhenAll(ws.Select(socket =>
+                    Console.WriteLine(string.Join(Environment.NewLine, ws.Where(s => s.IsFaulted).Select(s => s.Exception.InnerException.Message).Distinct()));
+                    Console.WriteLine($"Closing {successful} web socket connections...");
+                    await Task.WhenAll(ws.Where(s => !s.IsFaulted).Select(socket =>
                         socket.Result.CloseAsync(WebSocketCloseStatus.NormalClosure, "normal", CancellationToken.None)));
                 },
             1);
