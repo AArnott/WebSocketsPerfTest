@@ -69,8 +69,8 @@ namespace Client
             var buffer = new byte[100];
             for (int i = 0; i < iterations; i++)
             {
-                await socket.SendAsync(new ArraySegment<byte>(buffer, 0, 20), WebSocketMessageType.Binary, true, default);
-                await socket.ReceiveAsync(new ArraySegment<byte>(buffer, 0, 20), default);
+                await socket.SendAsync(new ArraySegment<byte>(buffer, 0, 20), WebSocketMessageType.Binary, true, CancellationToken.None);
+                await socket.ReceiveAsync(new ArraySegment<byte>(buffer, 0, 20), CancellationToken.None);
             }
 
             await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "normal", CancellationToken.None);
