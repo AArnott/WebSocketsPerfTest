@@ -4,6 +4,6 @@ namespace Server
 {
     public class SocketServer : ISocketServer
     {
-        public Task<string> HiAsync(string name) => Task.FromResult($"Hi, {name}!");
+        public Task<string> HiAsync(string name) => Task.FromResult($"WS {name}");
     }
 }

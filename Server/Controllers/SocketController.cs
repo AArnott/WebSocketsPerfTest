@@ -13,7 +13,7 @@ namespace Server.Controllers
     public class SocketController : ControllerBase
     {
         [HttpGet]
-        public async Task<IActionResult> Post()
+        public async Task<IActionResult> Get()
         {
             if (!this.HttpContext.WebSockets.IsWebSocketRequest)
             {
